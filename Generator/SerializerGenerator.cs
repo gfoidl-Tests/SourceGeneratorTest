@@ -29,7 +29,7 @@ namespace Generator
             ClassDeclarationSyntax? serializationClass             = serializationGeneratorSyntaxReceiver.ClassToAugment;
             List<InvocationExpressionSyntax>? candidateInvocations = serializationGeneratorSyntaxReceiver.CandidateInvocations;
 
-            if (serializationClass is null || candidateInvocations is null)
+            if (candidateInvocations is null)
                 return;
 
             if (context.Compilation is not CSharpCompilation csharpCompilation)
@@ -113,7 +113,7 @@ namespace Generator
         }
         //---------------------------------------------------------------------
         private static string Generate(
-            ClassDeclarationSyntax        serializationClass,
+            ClassDeclarationSyntax?        serializationClass,
             CSharpCompilation             csharpCompilation,
             IEnumerable<INamedTypeSymbol> typesToSerialize)
         {
@@ -129,7 +129,7 @@ namespace Generator
             return sb.ToString();
         }
         //---------------------------------------------------------------------
-        private static void WriteStart(StringBuilder sb, ClassDeclarationSyntax serializationClass)
+        private static void WriteStart(StringBuilder sb, ClassDeclarationSyntax? serializationClass)
         {
             sb.Append($@"using System;
 using System.Collections.Generic;
@@ -140,7 +140,7 @@ using System.Runtime.CompilerServices;
 namespace SourceGeneratorTest
 {{
     [CompilerGenerated]
-    public partial class {serializationClass.Identifier}
+    public partial class {serializationClass?.Identifier.ToString() ?? "SimpleSerializer"}
     {{");
         }
         //---------------------------------------------------------------------

@@ -11,4 +11,13 @@
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.1" PrivateAssets="all" />
     </ItemGroup>
 
+    <!-- https://github.com/dotnet/roslyn/blob/master/docs/features/source-generators.cookbook.md#package-a-generator-as-a-nuget-package -->
+    <PropertyGroup>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+
 </Project>

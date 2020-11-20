@@ -8,11 +8,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Generator\Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <PackageReference Include="Generator" Version="1.0.0" />
     </ItemGroup>
 
     <PropertyGroup>
         <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     </PropertyGroup>
-    
+
 </Project>
