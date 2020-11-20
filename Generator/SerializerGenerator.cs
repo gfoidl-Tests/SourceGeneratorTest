@@ -36,7 +36,7 @@ namespace Generator
                 return;
 
             var serializerInvocations = GetSerializerInvocations(csharpCompilation, candidateInvocations, context.CancellationToken);
-            var typesToSerialize      = GetTypesToSerialize(csharpCompilation, serializerInvocations, context.CancellationToken);
+            var typesToSerialize      = GetTypesToSerialize(context, csharpCompilation, serializerInvocations, context.CancellationToken);
 
             string source         = Generate(serializationClass, csharpCompilation, typesToSerialize);
             SourceText sourceText = SourceText.From(source, Encoding.UTF8);
@@ -64,7 +64,16 @@ namespace Generator
             }
         }
         //---------------------------------------------------------------------
+        private static readonly DiagnosticDescriptor s_argumentCountMismatch = new DiagnosticDescriptor(
+            id                : "SER001",
+            title             : "There must be exactely one argument",
+            messageFormat     : "There are {0} arguments, but only one is expected",
+            category          : "SimpleSerializer",
+            defaultSeverity   : DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+        //---------------------------------------------------------------------
         private static HashSet<INamedTypeSymbol> GetTypesToSerialize(
+            GeneratorExecutionContext               context,
             CSharpCompilation                       csharpCompilation,
             IEnumerable<InvocationExpressionSyntax> invocations,
             CancellationToken                       cancellationToken)
@@ -77,8 +86,8 @@ namespace Generator
 
                 if (arguments.Count != 1)
                 {
-                    // TODO: should this be a diagnostic instead?
-                    throw new InvalidOperationException("Only one argument allowed");
+                    context.ReportDiagnostic(Diagnostic.Create(s_argumentCountMismatch, Location.None, arguments.Count));
+                    continue;
                 }
 
                 ArgumentSyntax argument = arguments.First();
