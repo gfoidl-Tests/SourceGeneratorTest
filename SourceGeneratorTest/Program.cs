@@ -40,8 +40,8 @@ namespace SourceGeneratorTest
 
             static IEnumerable<Person> GetPersons()
             {
-                yield return new Person { Name = "Anton", Age = 42 };
-                yield return new Person { Name = "Berta", Age = 39 };
+                yield return new Person("Anton", 42);
+                yield return new Person("Berta", 39);
             }
         }
         //---------------------------------------------------------------------

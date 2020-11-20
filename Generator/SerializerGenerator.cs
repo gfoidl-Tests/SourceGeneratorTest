@@ -145,7 +145,7 @@ namespace SourceGeneratorTest
             Console.WriteLine(""");
 
             ISymbol[] properties = typeToSerialize.GetMembers()
-                .Where(s => s.Kind == SymbolKind.Property)
+                .Where(s => s.Kind == SymbolKind.Property && s.DeclaredAccessibility == Accessibility.Public)
                 .ToArray();
 
             foreach (ISymbol property in properties)
