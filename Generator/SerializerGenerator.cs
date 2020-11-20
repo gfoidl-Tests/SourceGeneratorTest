@@ -1,5 +1,11 @@
-﻿using System.Text;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
@@ -10,22 +16,113 @@ namespace Generator
     {
         public void Initialize(GeneratorInitializationContext context)
         {
-            context.RegisterForSyntaxNotifications(() => new MySyntaxReceiver());
+            context.RegisterForSyntaxNotifications(() => new SerializationGeneratorSyntaxReceiver());
         }
-
+        //---------------------------------------------------------------------
         public void Execute(GeneratorExecutionContext context)
         {
-            MySyntaxReceiver? syntaxReceiver = context.SyntaxReceiver as MySyntaxReceiver;
-            ClassDeclarationSyntax? userClass = syntaxReceiver?.ClassToAugment;
+            //Debugger.Launch();
 
-            if (userClass is null)
-            {
+            if (context.SyntaxReceiver is not SerializationGeneratorSyntaxReceiver serializationGeneratorSyntaxReceiver)
                 return;
+
+            ClassDeclarationSyntax? serializationClass             = serializationGeneratorSyntaxReceiver.ClassToAugment;
+            List<InvocationExpressionSyntax>? candidateInvocations = serializationGeneratorSyntaxReceiver.CandidateInvocations;
+
+            if (serializationClass is null || candidateInvocations is null)
+                return;
+
+            if (context.Compilation is not CSharpCompilation csharpCompilation)
+                return;
+
+            var serializerInvocations = GetSerializerInvocations(csharpCompilation, candidateInvocations, context.CancellationToken);
+            var typesToSerialize      = GetTypesToSerialize(csharpCompilation, serializerInvocations, context.CancellationToken);
+
+            string source         = Generate(serializationClass, csharpCompilation, typesToSerialize);
+            SourceText sourceText = SourceText.From(source, Encoding.UTF8);
+            context.AddSource("SimpleSerializer.generated", sourceText);
+        }
+        //---------------------------------------------------------------------
+        private static IEnumerable<InvocationExpressionSyntax> GetSerializerInvocations(
+            CSharpCompilation                       csharpCompilation,
+            IEnumerable<InvocationExpressionSyntax> canditateInvocations,
+            CancellationToken                       cancellationToken)
+        {
+            foreach (InvocationExpressionSyntax canditateInvocation in canditateInvocations)
+            {
+                // Nullability already checked in SerializationGeneratorSyntaxReceiver
+                MemberAccessExpressionSyntax maes = (canditateInvocation.Expression as MemberAccessExpressionSyntax)!;
+                IdentifierNameSyntax ins          = (maes.Expression as IdentifierNameSyntax)!;
+
+                SemanticModel semanticModel = csharpCompilation.GetSemanticModel(ins.SyntaxTree);
+                TypeInfo type               = semanticModel.GetTypeInfo(ins, cancellationToken);
+
+                if (type.Type?.Name == "SimpleSerializer")
+                {
+                    yield return canditateInvocation;
+                }
+            }
+        }
+        //---------------------------------------------------------------------
+        private static HashSet<INamedTypeSymbol> GetTypesToSerialize(
+            CSharpCompilation                       csharpCompilation,
+            IEnumerable<InvocationExpressionSyntax> invocations,
+            CancellationToken                       cancellationToken)
+        {
+            HashSet<INamedTypeSymbol> hashSet = new(EqualityComparer<INamedTypeSymbol>.Default);
+
+            foreach (InvocationExpressionSyntax invocationExpression in invocations)
+            {
+                SeparatedSyntaxList<ArgumentSyntax> arguments = invocationExpression.ArgumentList.Arguments;
+
+                if (arguments.Count != 1)
+                {
+                    // TODO: should this be a diagnostic instead?
+                    throw new InvalidOperationException("Only one argument allowed");
+                }
+
+                ArgumentSyntax argument = arguments.First();
+
+                if (argument.Expression is not IdentifierNameSyntax ins)
+                    continue;
+
+                SemanticModel semanticModel = csharpCompilation.GetSemanticModel(ins.SyntaxTree);
+
+                if (semanticModel.GetTypeInfo(ins, cancellationToken).Type is not INamedTypeSymbol typeSymbol)
+                    continue;
+
+                if (typeSymbol.TypeArguments.Length != 1)
+                    continue;
+
+                if (typeSymbol.TypeArguments[0] is INamedTypeSymbol typeArg)
+                {
+                    hashSet.Add(typeArg);
+                }
             }
 
+            return hashSet;
+        }
+        //---------------------------------------------------------------------
+        private static string Generate(
+            ClassDeclarationSyntax        serializationClass,
+            CSharpCompilation             csharpCompilation,
+            IEnumerable<INamedTypeSymbol> typesToSerialize)
+        {
             StringBuilder sb = new();
+            WriteStart(sb, serializationClass);
 
-            sb.AppendLine($@"
+            foreach (INamedTypeSymbol typeToSerialize in typesToSerialize)
+            {
+                WriteMethod(sb, csharpCompilation, typeToSerialize);
+            }
+
+            WriteEnd(sb);
+            return sb.ToString();
+        }
+        //---------------------------------------------------------------------
+        private static void WriteStart(StringBuilder sb, ClassDeclarationSyntax serializationClass)
+        {
+            sb.Append($@"using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
@@ -34,29 +131,73 @@ using System.Runtime.CompilerServices;
 namespace SourceGeneratorTest
 {{
     [CompilerGenerated]
-    public partial class {userClass.Identifier}
-    {{
-        public void Serialize(IEnumerable<Person> values)
-        {{
-            //@Impl
-        }}
-    }}
-}}
-");
-
-            SourceText sourceText = SourceText.From(sb.ToString(), Encoding.UTF8);
-            context.AddSource("SimpleSerializer.generated", sourceText);
+    public partial class {serializationClass.Identifier}
+    {{");
         }
+        //---------------------------------------------------------------------
+        private static void WriteMethod(StringBuilder sb, CSharpCompilation csharpCompilation, INamedTypeSymbol typeToSerialize)
+        {
+            sb.Append($@"
+        public void Serialize(IEnumerable<{typeToSerialize.Name}> items)
+        {{
+            if (items is null) throw new ArgumentNullException(nameof(items));
 
-        private class MySyntaxReceiver : ISyntaxReceiver
+            Console.WriteLine(""");
+
+            ISymbol[] properties = typeToSerialize.GetMembers()
+                .Where(s => s.Kind == SymbolKind.Property)
+                .ToArray();
+
+            foreach (ISymbol property in properties)
+            {
+                sb.Append(property.Name).Append("\\t");
+            }
+
+            sb.AppendLine("\");");
+
+            sb.Append($@"
+            foreach ({typeToSerialize.Name} item in items)
+            {{
+                Console.WriteLine($""");
+
+            foreach (ISymbol property in properties)
+            {
+                sb.Append("{item.").Append(property.Name).Append("}\\t");
+            }
+
+            sb.Append(@""");
+            }");
+
+            sb.Append(@"
+        }");
+        }
+        //---------------------------------------------------------------------
+        private static void WriteEnd(StringBuilder sb)
+        {
+            sb.AppendLine(@"
+    }
+}");
+        }
+        //---------------------------------------------------------------------
+        private class SerializationGeneratorSyntaxReceiver : ISyntaxReceiver
         {
             public ClassDeclarationSyntax? ClassToAugment { get; private set; }
-
+            public List<InvocationExpressionSyntax>? CandidateInvocations { get; private set; }
+            //-----------------------------------------------------------------
             public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
             {
                 if (syntaxNode is ClassDeclarationSyntax cds && cds.Identifier.ValueText == "SimpleSerializer")
                 {
                     this.ClassToAugment = cds;
+                }
+                else if (syntaxNode is InvocationExpressionSyntax ies)
+                {
+                    if (ies.Expression           is not MemberAccessExpressionSyntax maes) return;
+                    if (maes.Name                is not IdentifierNameSyntax ins) return;
+                    if (ins.Identifier.ValueText is not "Serialize") return;
+
+                    this.CandidateInvocations ??= new List<InvocationExpressionSyntax>();
+                    this.CandidateInvocations.Add(ies);
                 }
             }
         }

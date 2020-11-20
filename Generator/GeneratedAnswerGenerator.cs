@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
@@ -25,7 +25,7 @@ namespace GeneratedAnswer
             SourceText sourceText = SourceText.From(source, Encoding.UTF8);
             context.AddSource("GeneratedAnswer.generated", sourceText);
         }
-
+        //---------------------------------------------------------------------
         public void Initialize(GeneratorInitializationContext context)
         {
             // nop

@@ -19,8 +19,6 @@ trim_trailing_whitespace = true
 # C# files
 [*.cs]
 
-file_header_template = (c) gfoidl, all rights reserved
-
 #### .NET Coding Conventions ####
 
 # Organize usings
