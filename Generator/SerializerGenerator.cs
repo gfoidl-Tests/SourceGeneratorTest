@@ -54,7 +54,7 @@ namespace Generator
                 MemberAccessExpressionSyntax maes = (canditateInvocation.Expression as MemberAccessExpressionSyntax)!;
                 IdentifierNameSyntax ins          = (maes.Expression as IdentifierNameSyntax)!;
 
-                SemanticModel semanticModel = csharpCompilation.GetSemanticModel(ins.SyntaxTree);
+                SemanticModel semanticModel = GetSemanticModel(csharpCompilation, ins.SyntaxTree);
                 TypeInfo type               = semanticModel.GetTypeInfo(ins, cancellationToken);
 
                 if (type.Type?.Name == "SimpleSerializer")
@@ -95,7 +95,7 @@ namespace Generator
                 if (argument.Expression is not IdentifierNameSyntax ins)
                     continue;
 
-                SemanticModel semanticModel = csharpCompilation.GetSemanticModel(ins.SyntaxTree);
+                SemanticModel semanticModel = GetSemanticModel(csharpCompilation, ins.SyntaxTree);
 
                 if (semanticModel.GetTypeInfo(ins, cancellationToken).Type is not INamedTypeSymbol typeSymbol)
                     continue;
@@ -209,6 +209,19 @@ namespace SourceGeneratorTest
                     this.CandidateInvocations.Add(ies);
                 }
             }
+        }
+        //---------------------------------------------------------------------
+        private static readonly Dictionary<SyntaxTree, SemanticModel> s_semanticModelCache = new();
+
+        private static SemanticModel GetSemanticModel(Compilation compilation, SyntaxTree syntaxTree)
+        {
+            if (!s_semanticModelCache.TryGetValue(syntaxTree, out SemanticModel semanticModel))
+            {
+                semanticModel = compilation.GetSemanticModel(syntaxTree);
+                s_semanticModelCache.Add(syntaxTree, semanticModel);
+            }
+
+            return semanticModel;
         }
     }
 }
