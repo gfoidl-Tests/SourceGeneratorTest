@@ -15,6 +15,8 @@ namespace SourceGeneratorTest
             RunSimpleSerialization();
             Console.WriteLine(new string('-', 80));
             RunSimpleSerialization1();
+            Console.WriteLine(new string('-', 80));
+            RunExportDumper();
         }
         //---------------------------------------------------------------------
         private static void RunMySourceGenerator()
@@ -55,6 +57,11 @@ namespace SourceGeneratorTest
             };
 
             s_simpleSerializer.Serialize(values);
+        }
+        //---------------------------------------------------------------------
+        private static void RunExportDumper()
+        {
+            ExportDumper.Dump();
         }
     }
 }
