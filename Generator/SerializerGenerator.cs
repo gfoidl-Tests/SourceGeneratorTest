@@ -86,7 +86,7 @@ namespace Generator
 
                 if (arguments.Count != 1)
                 {
-                    context.ReportDiagnostic(Diagnostic.Create(s_argumentCountMismatch, Location.None, arguments.Count));
+                    context.ReportDiagnostic(Diagnostic.Create(s_argumentCountMismatch, invocationExpression.GetLocation(), arguments.Count));
                     continue;
                 }
 
