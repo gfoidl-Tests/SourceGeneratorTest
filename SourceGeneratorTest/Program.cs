@@ -17,6 +17,8 @@ namespace SourceGeneratorTest
             RunSimpleSerialization1();
             Console.WriteLine(new string('-', 80));
             RunExportDumper();
+            Console.WriteLine(new string('-', 80));
+            RunDoubleConstant();
         }
         //---------------------------------------------------------------------
         private static void RunMySourceGenerator()
@@ -62,6 +64,11 @@ namespace SourceGeneratorTest
         private static void RunExportDumper()
         {
             ExportDumper.Dump();
+        }
+        //---------------------------------------------------------------------
+        private static void RunDoubleConstant()
+        {
+            Calc.Print();
         }
     }
 }
