@@ -7,7 +7,7 @@ namespace Generator.NamedFormatGenerator;
 
 public partial class NamedFormatGenerator
 {
-    private record struct ParameterInfo(string Name, ITypeSymbol Type);
+    private readonly record struct ParameterInfo(string Name, ITypeSymbol Type);
     //-------------------------------------------------------------------------
     private record struct MethodInfo(string Name, Accessibility Accessibility, string Template, ImmutableArray<ParameterInfo> Parameters)
     {
@@ -27,7 +27,7 @@ public partial class NamedFormatGenerator
         }
     }
     //-------------------------------------------------------------------------
-    private record struct TypeInfo(string? Namespace, string Name, bool IsValueType)
+    private readonly record struct TypeInfo(string? Namespace, string Name, bool IsValueType)
     {
         public static TypeInfo Create(IMethodSymbol methodSymbol)
         {

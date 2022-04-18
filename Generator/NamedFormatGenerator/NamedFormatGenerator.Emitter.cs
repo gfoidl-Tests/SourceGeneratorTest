@@ -9,6 +9,8 @@ namespace Generator.NamedFormatGenerator;
 
 public partial class NamedFormatGenerator
 {
+    private readonly record struct EmitterOptions(bool AllowUnsafe, bool OptimizeForSpeed);
+    //-------------------------------------------------------------------------
     private static readonly string[] s_namespaces =
     {
         "System",
@@ -17,7 +19,7 @@ public partial class NamedFormatGenerator
         "System.Runtime.CompilerServices"
     };
     //-------------------------------------------------------------------------
-    private static void Emit(SourceProductionContext context, ImmutableArray<TemplateFormatMethod> methods, bool allowUnsafe)
+    private static void Emit(SourceProductionContext context, ImmutableArray<TemplateFormatMethod> methods, EmitterOptions emitterOptions)
     {
         //System.Diagnostics.Debugger.Launch();
 
@@ -27,7 +29,7 @@ public partial class NamedFormatGenerator
         foreach (IGrouping<TypeInfo, MethodInfo> methodGroup in methodGroups)
         {
             TypeInfo containingType = methodGroup.Key;
-            string code             = GenerateCode(containingType, methodGroup, allowUnsafe, buffer);
+            string code             = GenerateCode(containingType, methodGroup, emitterOptions, buffer);
             string fileName         = GetFilename(containingType, buffer);
 
             context.AddSource(fileName, code);
@@ -49,7 +51,7 @@ public partial class NamedFormatGenerator
         return buffer.ToString();
     }
     //-------------------------------------------------------------------------
-    private static string GenerateCode(TypeInfo typeInfo, IEnumerable<MethodInfo> methods, bool allowUnsafe, StringBuilder buffer)
+    private static string GenerateCode(TypeInfo typeInfo, IEnumerable<MethodInfo> methods, EmitterOptions emitterOptions, StringBuilder buffer)
     {
         buffer.Clear();
         using StringWriter sw           = new(buffer);
@@ -88,7 +90,7 @@ public partial class NamedFormatGenerator
 
         foreach (MethodInfo method in methods)
         {
-            EmitMethod(writer, method, allowUnsafe);
+            EmitMethod(writer, method, emitterOptions);
         }
 
         writer.Indent--;
@@ -97,12 +99,12 @@ public partial class NamedFormatGenerator
         return sw.ToString();
     }
     //-------------------------------------------------------------------------
-    private static void EmitMethod(IndentedTextWriter writer, MethodInfo methodInfo, bool allowUnsafe)
+    private static void EmitMethod(IndentedTextWriter writer, MethodInfo methodInfo, EmitterOptions emitterOptions)
     {
         writer.WriteLine($"[{s_generatedCodeAttribute}]");
         writer.WriteLine("[EditorBrowsable(EditorBrowsableState.Never)]");
 
-        if (allowUnsafe)
+        if (emitterOptions.AllowUnsafe)
         {
             writer.WriteLine("[SkipLocalsInit]");
         }

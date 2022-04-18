@@ -12,6 +12,9 @@ namespace Generator.NamedFormatGenerator;
 [Generator(LanguageNames.CSharp)]
 public partial class NamedFormatGenerator : IIncrementalGenerator
 {
+    // Name is lowercased
+    private const string NamedFormatGeneratorOptimizationEnabledMetadata = "build_property.namedformatgeneratoroptimizationenabled";
+
     private static readonly string   s_generatedCodeAttribute = $"GeneratedCode(\"{typeof(NamedFormatGenerator).Assembly.GetName().Name}\", \"{typeof(NamedFormatGenerator).Assembly.GetName().Version}\")";
     private static readonly string[] s_headers                =
     {
@@ -33,7 +36,7 @@ public partial class NamedFormatGenerator : IIncrementalGenerator
             .Where(templateFormatMethod => templateFormatMethod is not null)
             // This step isn't necessary. One could further transform the so-far collected data.
             // Here it's just sanitation.
-            .Select((state, _) =>
+            .Select(static (state, _) =>
             {
                 if (state is not TemplateFormatMethod templateFormatMethod)
                 {
@@ -56,13 +59,32 @@ public partial class NamedFormatGenerator : IIncrementalGenerator
         // are allowed, and only that information is then fed into RegisterSourceOutput along with all
         // of the cached generated data from each named format.
         IncrementalValueProvider<(bool AllowUnsafe, string? AssemblyName)> compilationData = context.CompilationProvider
-            .Select((c, _) => (c.Options is CSharpCompilationOptions { AllowUnsafe: true }, c.AssemblyName));
+            .Select(static (c, _) => (c.Options is CSharpCompilationOptions { AllowUnsafe: true }, c.AssemblyName));
 
-        var combined = codeOrDiagnostics.Combine(compilationData);
+        IncrementalValueProvider<bool> configOptionsData = context.AnalyzerConfigOptionsProvider
+            .Select((options, _) =>
+            {
+                System.Diagnostics.Debugger.Launch();
+
+                bool optimizeForSpeed = false;
+
+                if (options.GlobalOptions.TryGetValue(NamedFormatGeneratorOptimizationEnabledMetadata, out string? value))
+                {
+                    optimizeForSpeed = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                }
+
+                return optimizeForSpeed;
+            });
+
+        var combined = codeOrDiagnostics
+            .Combine(compilationData)
+            .Combine(configOptionsData);
+
         context.RegisterSourceOutput(combined, static (context, compilationData) =>
         {
-            ImmutableArray<object?> results = compilationData.Left;
-            var (allowUnsafe, assemblyName) = compilationData.Right;
+            ImmutableArray<object?> results = compilationData.Left.Left;
+            var (allowUnsafe, assemblyName) = compilationData.Left.Right;
+            bool optimizeForSpeed           = compilationData.Right;
 
             bool allFailures                                     = true;
             ImmutableArray<TemplateFormatMethod>.Builder builder = ImmutableArray.CreateBuilder<TemplateFormatMethod>();
@@ -91,7 +113,7 @@ public partial class NamedFormatGenerator : IIncrementalGenerator
             }
 
             ImmutableArray<TemplateFormatMethod> templateFormatMethods = builder.ToImmutableArray();
-            Emit(context, templateFormatMethods, allowUnsafe);
+            Emit(context, templateFormatMethods, new EmitterOptions(allowUnsafe, optimizeForSpeed));
         });
 #endif
     }
