@@ -2,6 +2,7 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using Generator.NamedFormatGenerator.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -45,7 +46,7 @@ public partial class NamedFormatGenerator
         {
             if (ValidateTemplate(template, methodSymbol, methodDeclarationSyntax, out Diagnostic? diagnostic))
             {
-                return TemplateFormatMethod.Create(methodSymbol, template);                
+                return TemplateFormatMethod.Create(methodSymbol, template);
             }
 
             templateOrDiagnostic = diagnostic;

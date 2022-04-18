@@ -3,14 +3,15 @@
 using System.CodeDom.Compiler;
 using System.Collections.Immutable;
 using System.Text;
+using Generator.NamedFormatGenerator.Models;
 using Microsoft.CodeAnalysis;
 
-namespace Generator.NamedFormatGenerator;
+namespace Generator.NamedFormatGenerator.Emitter;
 
-public partial class NamedFormatGenerator
+internal readonly record struct EmitterOptions(bool AllowUnsafe, bool OptimizeForSpeed);
+//-----------------------------------------------------------------------------
+internal abstract class NamedFormatGeneratorEmitter
 {
-    private readonly record struct EmitterOptions(bool AllowUnsafe, bool OptimizeForSpeed);
-    //-------------------------------------------------------------------------
     private static readonly string[] s_namespaces =
     {
         "System",
@@ -19,24 +20,41 @@ public partial class NamedFormatGenerator
         "System.Runtime.CompilerServices"
     };
     //-------------------------------------------------------------------------
-    private static void Emit(SourceProductionContext context, ImmutableArray<TemplateFormatMethod> methods, EmitterOptions emitterOptions)
+    protected readonly EmitterOptions _emitterOptions;
+    //-------------------------------------------------------------------------
+    protected NamedFormatGeneratorEmitter(EmitterOptions emitterOptions)
+    {
+        _emitterOptions = emitterOptions;
+    }
+    //-------------------------------------------------------------------------
+    public static NamedFormatGeneratorEmitter Create(EmitterOptions options)
+    {
+        if (options.OptimizeForSpeed)
+        {
+            return new OptimizingNamedFormatGeneratorEmitter(options);
+        }
+
+        return new DefaultNamedFormatGeneratorEmitter(options);
+    }
+    //-------------------------------------------------------------------------
+    public virtual void Emit(SourceProductionContext context, ImmutableArray<TemplateFormatMethod> methods)
     {
         //System.Diagnostics.Debugger.Launch();
 
-        StringBuilder buffer                                      = new();
-        IEnumerable<IGrouping<TypeInfo, MethodInfo>> methodGroups = methods.GroupBy(m => m.Type, m => m.Method);
+        StringBuilder buffer = new();
 
-        foreach (IGrouping<TypeInfo, MethodInfo> methodGroup in methodGroups)
+        IEnumerable<IGrouping<ContainingTypeInfo, MethodInfo>> methodGroups = methods.GroupBy(m => m.Type, m => m.Method);
+        foreach (IGrouping<ContainingTypeInfo, MethodInfo> methodGroup in methodGroups)
         {
-            TypeInfo containingType = methodGroup.Key;
-            string code             = GenerateCode(containingType, methodGroup, emitterOptions, buffer);
-            string fileName         = GetFilename(containingType, buffer);
+            ContainingTypeInfo containingType = methodGroup.Key;
+            string code                       = this.GenerateCode(containingType, methodGroup, buffer);
+            string fileName                   = GetFilename(containingType, buffer);
 
             context.AddSource(fileName, code);
         }
     }
     //-------------------------------------------------------------------------
-    private static string GetFilename(TypeInfo typeInfo, StringBuilder buffer)
+    private static string GetFilename(ContainingTypeInfo typeInfo, StringBuilder buffer)
     {
         buffer.Clear();
 
@@ -51,13 +69,13 @@ public partial class NamedFormatGenerator
         return buffer.ToString();
     }
     //-------------------------------------------------------------------------
-    private static string GenerateCode(TypeInfo typeInfo, IEnumerable<MethodInfo> methods, EmitterOptions emitterOptions, StringBuilder buffer)
+    protected virtual string GenerateCode(ContainingTypeInfo typeInfo, IEnumerable<MethodInfo> methods, StringBuilder buffer)
     {
         buffer.Clear();
         using StringWriter sw           = new(buffer);
         using IndentedTextWriter writer = new(sw);
 
-        foreach (string header in s_headers)
+        foreach (string header in Globals.Headers)
         {
             writer.WriteLine(header);
         }
@@ -90,7 +108,7 @@ public partial class NamedFormatGenerator
 
         foreach (MethodInfo method in methods)
         {
-            EmitMethod(writer, method, emitterOptions);
+            this.EmitMethod(writer, method);
         }
 
         writer.Indent--;
@@ -99,30 +117,30 @@ public partial class NamedFormatGenerator
         return sw.ToString();
     }
     //-------------------------------------------------------------------------
-    private static void EmitMethod(IndentedTextWriter writer, MethodInfo methodInfo, EmitterOptions emitterOptions)
+    protected virtual void EmitMethod(IndentedTextWriter writer, MethodInfo methodInfo)
     {
-        writer.WriteLine($"[{s_generatedCodeAttribute}]");
+        writer.WriteLine($"[{Globals.GeneratedCodeAttribute}]");
         writer.WriteLine("[EditorBrowsable(EditorBrowsableState.Never)]");
 
-        if (emitterOptions.AllowUnsafe)
+        if (_emitterOptions.AllowUnsafe)
         {
             writer.WriteLine("[SkipLocalsInit]");
         }
 
         writer.Write(AccessibilityText(methodInfo.Accessibility));
         writer.Write($" static partial string {methodInfo.Name}(");
-        EmitParameters(writer, methodInfo);
+        this.EmitParameters(writer, methodInfo);
         writer.WriteLine(")");
         writer.WriteLine("{");
         writer.Indent++;
         {
-            EmitMethodBody(writer, methodInfo);
+            this.EmitMethodBody(writer, methodInfo);
         }
         writer.Indent--;
         writer.WriteLine("}");
     }
     //-------------------------------------------------------------------------
-    private static void EmitParameters(IndentedTextWriter writer, MethodInfo methodInfo)
+    protected virtual void EmitParameters(IndentedTextWriter writer, MethodInfo methodInfo)
     {
         for (int i = 0; i < methodInfo.Parameters.Length; ++i)
         {
@@ -137,43 +155,9 @@ public partial class NamedFormatGenerator
         }
     }
     //-------------------------------------------------------------------------
-    private static void EmitMethodBody(IndentedTextWriter writer, MethodInfo methodInfo)
-    {
-        // Validation is already done, so here we can assume that the template is correct.
-
-        writer.Write("string result = string.Create(null, stackalloc char[128], $\"");
-
-        ReadOnlySpan<char> template              = methodInfo.Template.AsSpan();
-        ImmutableArray<ParameterInfo> parameters = methodInfo.Parameters;
-
-        for (int parameterIndex = 0; parameterIndex < parameters.Length; ++parameterIndex)
-        {
-            int index = template.IndexOf('{');
-            if (index < 0)
-            {
-                goto Exit;
-            }
-            index++;    // include the {
-
-            writer.Write(template.Slice(0, index).ToString());
-            writer.Write(parameters[parameterIndex].Name);
-            writer.Write("}");
-
-            index = template.IndexOf('}');
-            if (index < 0)
-            {
-                goto Exit;
-            }
-
-            template = template.Slice(index + 1);   // include the }
-        }
-
-    Exit:
-        writer.WriteLine("\");");
-        writer.WriteLine("return result;");
-    }
+    protected abstract void EmitMethodBody(IndentedTextWriter writer, MethodInfo methodInfo);
     //-------------------------------------------------------------------------
-    private static string AccessibilityText(Accessibility accessibility) => accessibility switch
+    protected static string AccessibilityText(Accessibility accessibility) => accessibility switch
     {
         Accessibility.Public               => "public",
         Accessibility.Protected            => "protected",

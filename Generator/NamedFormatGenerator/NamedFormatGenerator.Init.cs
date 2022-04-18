@@ -1,6 +1,7 @@
 // (c) gfoidl, all rights reserved
 
 using System.CodeDom.Compiler;
+using Generator.NamedFormatGenerator.Models;
 using Microsoft.CodeAnalysis;
 
 namespace Generator.NamedFormatGenerator;
@@ -20,7 +21,7 @@ public class {NamedFormatAttributeName} : Attribute
         using StringWriter sw           = new();
         using IndentedTextWriter writer = new(sw);
 
-        foreach (string header in s_headers)
+        foreach (string header in Globals.Headers)
         {
             writer.WriteLine(header);
         }
@@ -30,7 +31,7 @@ public class {NamedFormatAttributeName} : Attribute
         writer.WriteLine("using System.ComponentModel;");
         writer.WriteLine("using System.CodeDom.Compiler;");
         writer.WriteLine();
-        writer.WriteLine($"[{s_generatedCodeAttribute}]");
+        writer.WriteLine($"[{Globals.GeneratedCodeAttribute}]");
         writer.WriteLine("[EditorBrowsable(EditorBrowsableState.Always)]");
         writer.WriteLine(AttributeCode);
 
