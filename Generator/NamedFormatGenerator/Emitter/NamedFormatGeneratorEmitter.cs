@@ -47,7 +47,7 @@ internal abstract class NamedFormatGeneratorEmitter
         foreach (IGrouping<ContainingTypeInfo, MethodInfo> methodGroup in methodGroups)
         {
             ContainingTypeInfo containingType = methodGroup.Key;
-            string code                       = this.GenerateCode(containingType, methodGroup, buffer);
+            string code                       = this.GenerateCode(containingType, methodGroup.ToArray(), buffer);
             string fileName                   = GetFilename(containingType, buffer);
 
             context.AddSource(fileName, code);
@@ -69,7 +69,7 @@ internal abstract class NamedFormatGeneratorEmitter
         return buffer.ToString();
     }
     //-------------------------------------------------------------------------
-    protected virtual string GenerateCode(ContainingTypeInfo typeInfo, IEnumerable<MethodInfo> methods, StringBuilder buffer)
+    protected virtual string GenerateCode(ContainingTypeInfo typeInfo, MethodInfo[] methods, StringBuilder buffer)
     {
         buffer.Clear();
         using StringWriter sw           = new(buffer);
@@ -106,9 +106,14 @@ internal abstract class NamedFormatGeneratorEmitter
         writer.WriteLine("{");
         writer.Indent++;
 
-        foreach (MethodInfo method in methods)
+        for (int i = 0; i < methods.Length; ++i)
         {
-            this.EmitMethod(writer, method);
+            this.EmitMethod(writer, methods[i]);
+
+            if (i < methods.Length - 1)
+            {
+                writer.WriteLine("//-------------------------------------------------------------------------");
+            }
         }
 
         writer.Indent--;

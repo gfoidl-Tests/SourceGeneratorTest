@@ -15,7 +15,7 @@ internal sealed class DefaultNamedFormatGeneratorEmitter : NamedFormatGeneratorE
     {
         // Validation is already done, so here we can assume that the template is correct.
 
-        writer.Write("string result = string.Create(null, stackalloc char[128], $\"");
+        writer.Write("return string.Create(null, stackalloc char[128], $\"");
 
         ReadOnlySpan<char> template              = methodInfo.Template.AsSpan();
         ImmutableArray<ParameterInfo> parameters = methodInfo.Parameters;
@@ -44,6 +44,5 @@ internal sealed class DefaultNamedFormatGeneratorEmitter : NamedFormatGeneratorE
 
     Exit:
         writer.WriteLine("\");");
-        writer.WriteLine("return result;");
     }
 }
