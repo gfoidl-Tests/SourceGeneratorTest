@@ -15,7 +15,8 @@ namespace Generator.NamedFormatGenerator;
 public partial class NamedFormatGenerator : IIncrementalGenerator
 {
     // Name is lowercased
-    private const string NamedFormatGeneratorOptimizationEnabledMetadata = "build_property.namedformatgeneratoroptimizationenabled";
+    private const string NamedFormatGeneratorUnsafeOptimizationEnabledMetadata = "build_property.namedformatgeneratorunsafeoptimizationenabled";
+    private const string NamedFormatGeneratorUnsafeBufferSizeMetadata          = "build_property.namedformatgeneratorunsafebuffersize";
     //-------------------------------------------------------------------------
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -56,17 +57,23 @@ public partial class NamedFormatGenerator : IIncrementalGenerator
         IncrementalValueProvider<(bool AllowUnsafe, string? AssemblyName)> compilationData = context.CompilationProvider
             .Select(static (c, _) => (c.Options is CSharpCompilationOptions { AllowUnsafe: true }, c.AssemblyName));
 
-        IncrementalValueProvider<bool> configOptionsData = context.AnalyzerConfigOptionsProvider
+        IncrementalValueProvider<(bool Optimize, int? BufferSize)> configOptionsData = context.AnalyzerConfigOptionsProvider
             .Select((options, _) =>
             {
                 bool optimizeForSpeed = false;
-
-                if (options.GlobalOptions.TryGetValue(NamedFormatGeneratorOptimizationEnabledMetadata, out string? value))
+                if (options.GlobalOptions.TryGetValue(NamedFormatGeneratorUnsafeOptimizationEnabledMetadata, out string? value))
                 {
                     optimizeForSpeed = value.Equals("true", StringComparison.OrdinalIgnoreCase);
                 }
 
-                return optimizeForSpeed;
+                int? bufferSize = null;
+                if (options.GlobalOptions.TryGetValue(NamedFormatGeneratorUnsafeBufferSizeMetadata, out value)
+                 && int.TryParse(value, out int bufferSizeTmp))
+                {
+                    bufferSize = bufferSizeTmp;
+                }
+
+                return (optimizeForSpeed, bufferSize);
             });
 
         var combined = codeOrDiagnostics
@@ -75,9 +82,9 @@ public partial class NamedFormatGenerator : IIncrementalGenerator
 
         context.RegisterSourceOutput(combined, static (context, compilationData) =>
         {
-            ImmutableArray<object?> results = compilationData.Left.Left;
-            var (allowUnsafe, assemblyName) = compilationData.Left.Right;
-            bool optimizeForSpeed           = compilationData.Right;
+            ImmutableArray<object?> results    = compilationData.Left.Left;
+            var (allowUnsafe, assemblyName)    = compilationData.Left.Right;
+            var (optimizeForSpeed, bufferSize) = compilationData.Right;
 
             bool allFailures                                     = true;
             ImmutableArray<TemplateFormatMethod>.Builder builder = ImmutableArray.CreateBuilder<TemplateFormatMethod>();
@@ -106,7 +113,7 @@ public partial class NamedFormatGenerator : IIncrementalGenerator
             }
 
             ImmutableArray<TemplateFormatMethod> templateFormatMethods = builder.ToImmutableArray();
-            EmitterOptions emitterOptions                              = new(allowUnsafe, optimizeForSpeed);
+            EmitterOptions emitterOptions                              = new(allowUnsafe, optimizeForSpeed, bufferSize.GetValueOrDefault(-1));
             NamedFormatGeneratorEmitter emitter                        = NamedFormatGeneratorEmitter.Create(emitterOptions);
 
             emitter.Emit(context, templateFormatMethods);

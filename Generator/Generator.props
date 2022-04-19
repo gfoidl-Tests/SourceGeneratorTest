@@ -2,7 +2,8 @@
 
     <!-- https://github.com/dotnet/roslyn/blob/main/docs/features/source-generators.cookbook.md#consume-msbuild-properties-and-metadata -->
     <ItemGroup>
-        <CompilerVisibleProperty Include="NamedFormatGeneratorOptimizationEnabled" />
+        <CompilerVisibleProperty Include="NamedFormatGeneratorUnsafeOptimizationEnabled" />
+        <CompilerVisibleProperty Include="NamedFormatGeneratorUnsafeBufferSize" />
     </ItemGroup>
 
 </Project>

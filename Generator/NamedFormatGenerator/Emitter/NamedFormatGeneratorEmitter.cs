@@ -8,8 +8,6 @@ using Microsoft.CodeAnalysis;
 
 namespace Generator.NamedFormatGenerator.Emitter;
 
-internal readonly record struct EmitterOptions(bool AllowUnsafe, bool OptimizeForSpeed);
-//-----------------------------------------------------------------------------
 internal abstract class NamedFormatGeneratorEmitter
 {
     private static readonly string[] s_namespaces =
@@ -19,8 +17,15 @@ internal abstract class NamedFormatGeneratorEmitter
         "System.ComponentModel",
         "System.Runtime.CompilerServices"
     };
+
+    private static readonly string[] s_warningPragmas =
+    {
+        "CS0219  // The variable '...' is assigned but its value is never used"
+    };
     //-------------------------------------------------------------------------
     protected readonly EmitterOptions _emitterOptions;
+    //-------------------------------------------------------------------------
+    protected virtual string[]? AdditionalNamespaces { get; }
     //-------------------------------------------------------------------------
     protected NamedFormatGeneratorEmitter(EmitterOptions emitterOptions)
     {
@@ -79,12 +84,9 @@ internal abstract class NamedFormatGeneratorEmitter
         {
             writer.WriteLine(header);
         }
-        writer.WriteLine();
 
-        foreach (string ns in s_namespaces)
-        {
-            writer.WriteLine($"using {ns};");
-        }
+        EmitWarningPragmas(writer, disable: true);
+        this.EmitNamespaces(writer);
         writer.WriteLine();
 
         if (typeInfo.Namespace is not null)
@@ -119,7 +121,42 @@ internal abstract class NamedFormatGeneratorEmitter
         writer.Indent--;
         writer.WriteLine("}");
 
+        EmitWarningPragmas(writer, disable: false);
+
         return sw.ToString();
+    }
+    //-------------------------------------------------------------------------
+    private void EmitNamespaces(IndentedTextWriter writer)
+    {
+        IEnumerable<string> namespaces = s_namespaces;
+
+        if (this.AdditionalNamespaces is not null)
+        {
+            namespaces = namespaces
+                .Concat(this.AdditionalNamespaces)
+                .OrderBy(ns => ns);
+        }
+
+        foreach (string ns in namespaces)
+        {
+            writer.WriteLine($"using {ns};");
+        }
+    }
+    //-------------------------------------------------------------------------
+    private static void EmitWarningPragmas(IndentedTextWriter writer, bool disable)
+    {
+        string text = $"#pragma warning {(disable ? "disable" : "restore")} ";
+
+        writer.WriteLine();
+        foreach (string pragma in s_warningPragmas)
+        {
+            writer.WriteLine($"{text}{pragma}");
+        }
+
+        if (disable)
+        {
+            writer.WriteLine();
+        }
     }
     //-------------------------------------------------------------------------
     protected virtual void EmitMethod(IndentedTextWriter writer, MethodInfo methodInfo)

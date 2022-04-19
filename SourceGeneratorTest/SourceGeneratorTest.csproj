@@ -14,7 +14,8 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <NamedFormatGeneratorOptimizationEnabled>true</NamedFormatGeneratorOptimizationEnabled>
+        <NamedFormatGeneratorUnsafeOptimizationEnabled>true</NamedFormatGeneratorUnsafeOptimizationEnabled>
+        <!--<NamedFormatGeneratorUnsafeBufferSize>512</NamedFormatGeneratorUnsafeBufferSize>-->
     </PropertyGroup>
 
     <ItemGroup>

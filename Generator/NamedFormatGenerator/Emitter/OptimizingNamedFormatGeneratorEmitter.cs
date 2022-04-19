@@ -10,8 +10,17 @@ namespace Generator.NamedFormatGenerator.Emitter;
 
 internal sealed class OptimizingNamedFormatGeneratorEmitter : NamedFormatGeneratorEmitter
 {
+    private const int ThreshouldForStackAlloc = 128;
+    //-------------------------------------------------------------------------
+    private static readonly string[] s_additionalNamespaces =
+    {
+        "System.Buffers"
+    };
+    //-------------------------------------------------------------------------
     public OptimizingNamedFormatGeneratorEmitter(EmitterOptions options) : base(options)
     { }
+    //-------------------------------------------------------------------------
+    protected override string[]? AdditionalNamespaces => s_additionalNamespaces;
     //-------------------------------------------------------------------------
     protected override void EmitMethodBody(IndentedTextWriter writer, MethodInfo methodInfo)
     {
@@ -19,7 +28,15 @@ internal sealed class OptimizingNamedFormatGeneratorEmitter : NamedFormatGenerat
 
         // Validation is already done, so here we can assume that the template is correct.
 
-        writer.WriteLine("Span<char> buffer = stackalloc char[128];");
+        if (_emitterOptions.BufferSize <= ThreshouldForStackAlloc)
+        {
+            writer.WriteLine($"Span<char> buffer = stackalloc char[{ThreshouldForStackAlloc}];");
+        }
+        else
+        {
+            writer.WriteLine($"char[] rentArray  = ArrayPool<char>.Shared.Rent({_emitterOptions.BufferSize});");
+            writer.WriteLine("Span<char> buffer = rentArray;");
+        }
         writer.WriteLine("int written       = 0;");
         writer.WriteLine("int charsWritten  = 0;");
         writer.WriteLine();
@@ -52,7 +69,17 @@ internal sealed class OptimizingNamedFormatGeneratorEmitter : NamedFormatGenerat
             writer.WriteLine();
         }
 
-        writer.WriteLine("return new string(buffer.Slice(0, written));");
+        if (_emitterOptions.BufferSize <= ThreshouldForStackAlloc)
+        {
+            writer.WriteLine("return new string(buffer.Slice(0, written));");
+        }
+        else
+        {
+            writer.WriteLine("string result = new string(buffer.Slice(0, written));");
+            writer.WriteLine("ArrayPool<char>.Shared.Return(rentArray);");
+            writer.WriteLine();
+            writer.WriteLine("return result;");
+        }
 
         Debug.Assert(template.IsEmpty);
 
@@ -105,11 +132,11 @@ internal sealed class OptimizingNamedFormatGeneratorEmitter : NamedFormatGenerat
         {
             if (parameterIndex == 0)
             {
-                writer.WriteLine($"\"{literal}\".AsSpan().CopyTo(buffer);");
+                writer.WriteLine($"\"{literal}\".CopyTo(buffer);");
             }
             else
             {
-                writer.WriteLine($"\"{literal}\".AsSpan().CopyTo(buffer.Slice(written));");
+                writer.WriteLine($"\"{literal}\".CopyTo(buffer.Slice(written));");
             }
 
             writer.WriteLine($"written += \"{literal}\".Length;");
@@ -125,32 +152,43 @@ internal sealed class OptimizingNamedFormatGeneratorEmitter : NamedFormatGenerat
     //-------------------------------------------------------------------------
     private static void EmitParameterValue(IndentedTextWriter writer, ParameterInfo parameter)
     {
-        if (IsSpanFormatable(parameter.Type))
+        if (parameter.Type.SpecialType == SpecialType.System_String)
+        {
+            writer.WriteLine($"{parameter.Name}.CopyTo(buffer.Slice(written));");
+            writer.WriteLine($"written += {parameter.Name}.Length;");
+        }
+        else if (HasInterface(parameter.Type, "ISpanFormattable", "System"))
         {
             writer.WriteLine($"{parameter.Name}.TryFormat(buffer.Slice(written), out charsWritten);");
             writer.WriteLine("written += charsWritten;");
         }
-        else if (parameter.Type.SpecialType == SpecialType.System_String)
+        else if (HasInterface(parameter.Type, "IFormattable", "System"))
         {
-            writer.WriteLine($"{parameter.Name}.AsSpan().CopyTo(buffer.Slice(written));");
-            writer.WriteLine($"written += {parameter.Name}.Length;");
+            writer.WriteLine("// Value can be written via IFormattable");
+            writer.WriteLine("{");
+            writer.Indent++;
+
+            writer.WriteLine($"string tmp = {parameter.Name}.ToString(null, null);");
+            writer.WriteLine("tmp.CopyTo(buffer.Slice(written));");
+            writer.WriteLine("written += tmp.Length;");
+
+            writer.Indent--;
+            writer.WriteLine("}");
         }
         else
         {
+            writer.WriteLine("// No interface for faster formatting found, so just use object.ToString()");
             writer.WriteLine("{");
             writer.Indent++;
 
             writer.WriteLine($"string tmp = {parameter.Name}.ToString();");
-            writer.WriteLine("tmp.AsSpan().CopyTo(buffer.Slice(written));");
+            writer.WriteLine("tmp.CopyTo(buffer.Slice(written));");
             writer.WriteLine("written += tmp.Length;");
 
             writer.Indent--;
             writer.WriteLine("}");
         }
     }
-    //-------------------------------------------------------------------------
-    private static bool IsSpanFormatable(ITypeSymbol typeSymbol)
-        => HasInterface(typeSymbol, "ISpanFormattable", "System");
     //-------------------------------------------------------------------------
     private static bool HasInterface(ITypeSymbol typeSymbol, string interfaceName, string ns)
     {
