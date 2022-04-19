@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Microsoft.CodeAnalysis;
 
 namespace Microsoft.CodeAnalysis.DotnetRuntime.Extensions
 {
+    [DebuggerNonUserCode]
     internal static class RoslynExtensions
     {
         // Copied from: https://github.com/dotnet/roslyn/blob/main/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/Extensions/CompilationExtensions.cs

@@ -37,7 +37,7 @@ public partial class NamedFormatGenerator
         }
 
         if (semanticModel.GetDeclaredSymbol(methodDeclarationSyntax) is not { } methodSymbol) return null;
-        if (!methodSymbol.IsPartialDefinition || !methodSymbol.IsStatic)                      return null;
+        if (!IsMethodDeclarationPartial(methodSymbol))                                        return null;
         if (!ReturnsString(methodSymbol))                                                     return null;
 
         object? templateOrDiagnostic = GetNamedFormatTemplateAttributeOrDiagnostic(methodSymbol, methodDeclarationSyntax);
@@ -54,6 +54,15 @@ public partial class NamedFormatGenerator
 
         // Diagnostic or null (which is filtered out later)
         return templateOrDiagnostic;
+    }
+    //-------------------------------------------------------------------------
+    private static bool IsMethodDeclarationPartial(IMethodSymbol methodSymbol)
+    {
+        if (!methodSymbol.IsPartialDefinition) return false;
+
+        // We allow non-static methods too. But they only make sense for default interface members.
+        //return methodSymbol.IsStatic || methodSymbol.ContainingType.TypeKind == TypeKind.Interface;
+        return true;
     }
     //-------------------------------------------------------------------------
     private static bool ReturnsString(IMethodSymbol methodSymbol)

@@ -15,6 +15,7 @@ internal abstract class NamedFormatGeneratorEmitter
         "System",
         "System.CodeDom.Compiler",
         "System.ComponentModel",
+        "System.Diagnostics",
         "System.Runtime.CompilerServices"
     };
 
@@ -95,15 +96,7 @@ internal abstract class NamedFormatGeneratorEmitter
             writer.WriteLine();
         }
 
-        writer.Write("partial ");
-        if (typeInfo.IsValueType)
-        {
-            writer.Write("struct ");
-        }
-        else
-        {
-            writer.Write("class ");
-        }
+        writer.Write($"partial {typeInfo.TypeKind} ");
         writer.WriteLine($"{typeInfo.Name}");
         writer.WriteLine("{");
         writer.Indent++;
@@ -163,6 +156,7 @@ internal abstract class NamedFormatGeneratorEmitter
     {
         writer.WriteLine($"[{Globals.GeneratedCodeAttribute}]");
         writer.WriteLine("[EditorBrowsable(EditorBrowsableState.Never)]");
+        writer.WriteLine("[DebuggerNonUserCode]");
 
         if (_emitterOptions.AllowUnsafe)
         {
@@ -170,7 +164,11 @@ internal abstract class NamedFormatGeneratorEmitter
         }
 
         writer.Write(AccessibilityText(methodInfo.Accessibility));
-        writer.Write($" static partial string {methodInfo.Name}(");
+        if (methodInfo.IsStatic)
+        {
+            writer.Write(" static");
+        }
+        writer.Write($" partial string {methodInfo.Name}(");
         this.EmitParameters(writer, methodInfo);
         writer.WriteLine(")");
         writer.WriteLine("{");

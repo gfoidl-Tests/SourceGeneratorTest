@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis;
 
 namespace Generator.NamedFormatGenerator.Models;
 
-internal record struct MethodInfo(string Name, Accessibility Accessibility, string Template, ImmutableArray<ParameterInfo> Parameters)
+internal record struct MethodInfo(string Name, Accessibility Accessibility, bool IsStatic, string Template, ImmutableArray<ParameterInfo> Parameters)
 {
     public static MethodInfo Create(IMethodSymbol methodSymbol, string template)
     {
@@ -19,6 +19,6 @@ internal record struct MethodInfo(string Name, Accessibility Accessibility, stri
             builder.Add(new ParameterInfo(parameterName, typeSymbol));
         }
 
-        return new MethodInfo(methodSymbol.Name, methodSymbol.DeclaredAccessibility, template, builder.ToImmutableArray());
+        return new MethodInfo(methodSymbol.Name, methodSymbol.DeclaredAccessibility, methodSymbol.IsStatic, template, builder.ToImmutableArray());
     }
 }
