@@ -42,6 +42,11 @@ internal sealed class DefaultNamedFormatGeneratorEmitter : NamedFormatGeneratorE
             template = template.Slice(index + 1);   // include the }
         }
 
+        if (!template.IsEmpty)
+        {
+            writer.Write(template.ToString());
+        }
+
     Exit:
         writer.WriteLine("\");");
     }

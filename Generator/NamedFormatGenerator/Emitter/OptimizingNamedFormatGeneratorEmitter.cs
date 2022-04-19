@@ -40,7 +40,18 @@ internal sealed class OptimizingNamedFormatGeneratorEmitter : NamedFormatGenerat
             }
         }
 
-        writer.WriteLine();
+        if (!template.IsEmpty)
+        {
+            writer.WriteLine();
+            writer.WriteLine("// Remainder of template");
+            EmitLiteral(writer, template, parameterIndex: int.MaxValue, template.Length);
+            template = template.Slice(template.Length);
+        }
+        else
+        {
+            writer.WriteLine();
+        }
+
         writer.WriteLine("return new string(buffer.Slice(0, written));");
 
         Debug.Assert(template.IsEmpty);
